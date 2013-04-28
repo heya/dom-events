@@ -23,8 +23,8 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 	NodeEvents.prototype.destroy =
 	NodeEvents.prototype.remove =
 	NodeEvents.prototype.release = function release(){
-		EventSource.prototype.release.call(this);
 		this._remove();
+		EventSource.prototype.release.call(this);
 	};
 
 	NodeEvents.prototype._attach = function(){
