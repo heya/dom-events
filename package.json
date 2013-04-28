@@ -1,0 +1,28 @@
+{
+  "name": "heya-dom-events",
+  "version": "0.1.0",
+  "description": "DOM-events: event streams for browsers.",
+  "main": "main.js",
+  "directories": {
+    "test": "tests"
+  },
+  "dependencies": {
+    "heya-has": ">=0.1",
+    "heya-dom": ">=0.1",
+    "heya-events": ">=0.1"
+  },
+  "devDependencies": {
+    "heya-unit": ">=0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/heya/dom-events.git"
+  },
+  "keywords": [
+    "DOM",
+    "events",
+    "event stream"
+  ],
+  "author": "Eugene Lazutkin <eugene.lazutkin@gmail.com> (http://lazutkin.com/)",
+  "license": "BSD"
+}
