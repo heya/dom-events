@@ -3,27 +3,15 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 	"use strict";
 
 	has.add("event-orientationchange", has("touch") && !has("android")); // TODO: how do we detect this?
-	has.add("event-stopimmediatepropagation", window.Event && !!window.Event.prototype && !!window.Event.prototype.stopImmediatePropagation);
+	has.add("event-stopimmediatepropagation",
+		window.Event && !!window.Event.prototype && !!window.Event.prototype.stopImmediatePropagation);
 	has.add("event-focusin", function(global, doc, element){
 		// All browsers except firefox support focusin, but too hard to feature test webkit since element.onfocusin
 		// is undefined.  Just return true for IE and use fallback path for other browsers.
 		return !!element.attachEvent;
 	});
 
-	if(!has("event-stopimmediatepropagation")){
-		var stopImmediatePropagation =function(){
-			this.immediatelyStopped = true;
-			this.modified = true; // mark it as modified so the event will be cached in IE
-		};
-		var addStopImmediate = function(listener){
-			return function(evt){
-				if(!evt.immediatelyStopped){// check to make sure it hasn't been stopped immediately
-					evt.stopImmediatePropagation = stopImmediatePropagation;
-					return listener.apply(this, arguments);
-				}
-			};
-		}
-	}
+	// assumption: all modern browsers support stopImmediatePropagation() per MDN
 
 	var touchEvents = /^touch/, captures = {focusin: "focus", focusout: "blur"};
 
@@ -31,7 +19,7 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 		EventSource.call(this);
 		this.source = dom.byId(source);
 		this.type = type;
-		this._attach();
+		this._remove = this._attach(type);
 	}
 	NodeEvents.prototype = Object.create(EventSource.prototype);
 
@@ -42,24 +30,20 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 		EventSource.prototype.release.call(this);
 	};
 
-	NodeEvents.prototype._attach = function(){
-		var source = this.source, type = this.type, listener = _listener, capture = false;
+	NodeEvents.prototype._attach = function(type){
+		var source = this.source, cb = listener, capture = false;
 		// test to see if it a touch event right now, so we don't have to do it every time it fires
 		if(has("touch")){
 			if(touchEvents.test(type)){
 				// touch event, fix it
-				listener = _touchListener;
+				cb = _touchListener;
 			}else if(!has("event-orientationchange") && (type == "orientationchange")){
 				//"orientationchange" not supported <= Android 2.1,
 				//but works through "resize" on window
 				type = "resize";
 				source = window;
-				listener = _touchListener;
+				cb = touchListener;
 			}
-		}
-		if(addStopImmediate){
-			// add stopImmediatePropagation if it doesn't exist
-			listener = addStopImmediate(listener);
 		}
 		// the source has addEventListener, which should be used if available (might or might not be a node, non-nodes can implement this method as well)
 		// check for capture conversions
@@ -67,22 +51,24 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 			type = captures[type];
 			capture = true;
 		}
-		listener = listener.bind(this);
-		source.addEventListener(type, listener, capture);
-		this._remove = function(){
-			source.removeEventListener(adjustedType, listener, capture);
+		cb = cb.bind(this);
+		source.addEventListener(type, cb, capture);
+		return function(){
+			source.removeEventListener(adjustedType, cb, capture);
 		};
 	};
 
-	NodeEvents.prototype._listener = function(evt){
+	// utilities
+
+	function listener(evt){
 		this.micro.send(new EventSource.Value(evt));
-	};
+	}
 
 	var windowOrientation = window.orientation;
 
 	function PseudoEvent(){}
 
-	NodeEvents.prototype._touchListener = function(evt){
+	function touchListener(evt){
 		//Event normalization(for ontouchxxx and resize):
 		//1.incorrect e.pageX|pageY in iOS
 		//2.there are no "e.rotation", "e.scale" and "onorientationchange" in Android
@@ -145,7 +131,7 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 		}
 
 		this.micro.send(new EventSource.Value(evt));
-	};
+	}
 
 	return NodeEvents;
 });

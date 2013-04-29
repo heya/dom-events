@@ -16,7 +16,7 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 		EventSource.call(this);
 		this.source = dom.byId(source);
 		this.type = type;
-		this._attach();
+		this._remove = this._attach("on" + type);
 	}
 	NodeEvents.prototype = Object.create(EventSource.prototype);
 
@@ -27,8 +27,8 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 		EventSource.prototype.release.call(this);
 	};
 
-	NodeEvents.prototype._attach = function(){
-		var source = this.source, type = "on" + this.type, listener = _listener, capture = false;
+	NodeEvents.prototype._attach = function(type){
+		var source = this.source, capture = false;
 		// touch events are removed because old IE do not support them
 		// IE will leak memory on certain handlers in frames (IE8 and earlier) and in unattached DOM nodes for JScript 5.7 and below.
 		// Here we use global redirection to solve the memory leaks
@@ -48,14 +48,16 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 		}
 		var handle;
 		emitter.listeners.push(handle = (emitter._dojoIEListeners_.push(listener) - 1));
-		this._remove = function(){
+		return function(){
 			delete _dojoIEListeners_[handle];
 		};
 	};
 
+	// utilities
+
 	var lastEvent;	//TODO: why do we even need it?
 
-	NodeEvents.prototype._listener = function(evt){
+	function listener(evt){
 		if(!evt){
 			evt = (window && (window.ownerDocument || window.document ||
 				window).parentWindow || window).event;
@@ -123,7 +125,7 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 			}
 			lastEvent = evt;
 		}
-	};
+	}
 
 	function setKeyChar(evt){
 		evt.keyChar = evt.charCode ? String.fromCharCode(evt.charCode) : "";
