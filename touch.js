@@ -1,14 +1,13 @@
-define(["./_base/kernel", "./aspect", "./dom", "./dom-class", "./_base/lang", "./on", "./has", "./mouse", "./domReady", "./_base/window"],
-function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
+define(["domReady", "heya-has/sniff", "heya-dom/dom", "heya-dom/window", "heya-dom/class",
+	"./on", "./emit", "./mouse", ],
+function(domReady, has, dom, win, cls, on, emit, mouse){
+	"use strict";
 
 	// module:
 	//		dojo/touch
 
-	var hasTouch = has("touch");
-
-	var ios4 = has("ios") < 5;
-	
-	var msPointer = navigator.msPointerEnabled;
+	var hasTouch = has("touch"), ios4 = has("ios") < 5,
+		msPointer = navigator && navigator.msPointerEnabled;
 
 	// Click generation variables
 	var clicksInited, clickTracker, clickTarget, clickX, clickY, clickDx, clickDy, clickTime;
@@ -17,51 +16,49 @@ function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
 	var lastTouch;
 
 	function dualEvent(mouseType, touchType, msPointerType){
-		// Returns synthetic event that listens for both the specified mouse event and specified touch event.
-		// But ignore fake mouse events that were generated due to the user touching the screen.
+		// Returns synthetic event that listens for both the specified mouse event
+		// and specified touch event. But ignore fake mouse events that were generated
+		// due to the user touching the screen.
 		if(msPointer && msPointerType){
-			// IE10+: MSPointer* events are designed to handle both mouse and touch in a uniform way,
-			// so just use that regardless of hasTouch.
-			return function(node, listener){
-				return on(node, msPointerType, listener);
+			// IE10+: MSPointer* events are designed to handle both mouse and touch
+			// in a uniform way, so just use that regardless of hasTouch.
+			return function(node){
+				return on(node, msPointerType);
 			}
 		}else if(hasTouch){
-			return function(node, listener){
-				var handle1 = on(node, touchType, listener),
-					handle2 = on(node, mouseType, function(evt){
-						if(!lastTouch || (new Date()).getTime() > lastTouch + 1000){
-							listener.call(this, evt);
-						}
-					});
-				return {
-					remove: function(){
-						handle1.remove();
-						handle2.remove();
-					}
-				};
+			return function(node){
+				// TODO: allow dual connections
+				return on(node, [touchType, mouseType], function(evt, sink){
+					return /mouse/i.test(evt.type) || !lastTouch ||
+						new Date().getTime() > lastTouch + 1000 ? evt : sink.noValue;
+				});
 			};
 		}else{
-			// Avoid creating listeners for touch events on performance sensitive older browsers like IE6
-			return function(node, listener){
-				return on(node, mouseType, listener);
+			// Avoid creating listeners for touch events on performance sensitive
+			// older browsers like IE6
+			return function(node){
+				return on(node, mouseType);
 			}
 		}
 	}
 
 	function marked(/*DOMNode*/ node){
-		// Test if a node or its ancestor has been marked with the dojoClick property to indicate special processing,
+		// Test if a node or its ancestor has been marked with the dojoClick property
+		// to indicate special processing,
 		do{
 			if(node.dojoClick){ return node.dojoClick; }
 		}while(node = node.parentNode);
 	}
-	
+
 	function doClicks(e, moveType, endType){
 		// summary:
-		//		Setup touch listeners to generate synthetic clicks immediately (rather than waiting for the browser
-		//		to generate clicks after the double-tap delay) and consistently (regardless of whether event.preventDefault()
-		//		was called in an event listener. Synthetic clicks are generated only if a node or one of its ancestors has
-		//		its dojoClick property set to truthy.
-		
+		//		Setup touch listeners to generate synthetic clicks immediately
+		//		(rather than waiting for the browser to generate clicks after
+		//		the double-tap delay) and consistently (regardless of whether
+		//		event.preventDefault() was called in an event listener.
+		//		Synthetic clicks are generated only if a node or one of
+		//		its ancestors has its dojoClick property set to truthy.
+
 		clickTracker  = !e.target.disabled && marked(e.target); // click threshold = true, number or x/y object
 		if(clickTracker){
 			clickTarget = e.target;
@@ -91,11 +88,11 @@ function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
 							target = dom.byId(target.getAttribute("for")) || target;
 						}
 						setTimeout(function(){
-							on.emit(target, "click", {
+							emit(target, "click", {
 								bubbles : true,
 								cancelable : true,
 								_dojo_click : true
-							});
+							}, 0); // TODO: really???
 						});
 					}
 				}, true);
@@ -111,7 +108,7 @@ function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
 						// we call click() explicitly, we don't want to stop this event.
 						if(!e._dojo_click &&
 								(new Date()).getTime() <= clickTime + 1000 &&
-								!(e.target.tagName == "INPUT" && domClass.contains(e.target, "dijitOffScreen"))){
+								!(e.target.tagName == "INPUT" && cls.contains(e.target, "dijitOffScreen"))){
 							e.stopPropagation();
 							e.stopImmediatePropagation && e.stopImmediatePropagation();
 							if(type == "click" && (e.target.tagName != "INPUT" || e.target.type == "radio" || e.target.type == "checkbox")
@@ -144,7 +141,7 @@ function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
 				win.doc.addEventListener("MSPointerDown", function(evt){
 					doClicks(evt, "MSPointerMove", "MSPointerUp");
 				}, true);
-			});		
+			});
 		}else{
 			domReady(function(){
 				// Keep track of currently hovered node
@@ -158,26 +155,25 @@ function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
 					// and to ensure this code runs even if the listener on the node does event.stop().
 					var oldNode = hoveredNode;
 					hoveredNode = evt.target;
-					on.emit(oldNode, "dojotouchout", {
+					emit(oldNode, "dojotouchout", {
 						relatedTarget: hoveredNode,
 						bubbles: true
 					});
-					on.emit(hoveredNode, "dojotouchover", {
+					emit(hoveredNode, "dojotouchover", {
 						relatedTarget: oldNode,
 						bubbles: true
 					});
-				
+
 					doClicks(evt, "touchmove", "touchend"); // init click generation
 				}, true);
 
 				function copyEventProps(evt){
-					// Make copy of event object and also set bubbles:true.  Used when calling on.emit().
-					var props = lang.delegate(evt, {
-						bubbles: true
-					});
+					// Make copy of event object and also set bubbles:true.  Used when calling emit().
+					var props = Object.create(evt);
+					props.bubbles = true;
 
 					if(has("ios") >= 6){
-						// On iOS6 "touches" became a non-enumerable property, which 
+						// On iOS6 "touches" became a non-enumerable property, which
 						// is not hit by for...in.  Ditto for the other properties below.
 						props.touches = evt.touches;
 						props.altKey = evt.altKey;
@@ -190,9 +186,9 @@ function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
 
 					return props;
 				}
-				
+
 				on(win.doc, "touchmove", function(evt){
-					lastTouch = (new Date()).getTime();
+					lastTouch = new Date().getTime();
 
 					var newNode = win.doc.elementFromPoint(
 						evt.pageX - (ios4 ? 0 : win.global.pageXOffset), // iOS 4 expects page coords
@@ -203,13 +199,13 @@ function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
 						// Fire synthetic touchover and touchout events on nodes since the browser won't do it natively.
 						if(hoveredNode !== newNode){
 							// touch out on the old node
-							on.emit(hoveredNode, "dojotouchout", {
+							emit(hoveredNode, "dojotouchout", {
 								relatedTarget: newNode,
 								bubbles: true
 							});
 
 							// touchover on the new node
-							on.emit(newNode, "dojotouchover", {
+							emit(newNode, "dojotouchover", {
 								relatedTarget: hoveredNode,
 								bubbles: true
 							});
@@ -217,38 +213,30 @@ function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
 							hoveredNode = newNode;
 						}
 
-						// Unlike a listener on "touchmove", on(node, "dojotouchmove", listener) fires when the finger
-						// drags over the specified node, regardless of which node the touch started on.
-						on.emit(newNode, "dojotouchmove", copyEventProps(evt));
+						// Unlike a listener on "touchmove", on(node, "dojotouchmove", listener)
+						// fires when the finger drags over the specified node, regardless of
+						// which node the touch started on.
+						emit(newNode, "dojotouchmove", copyEventProps(evt));
 					}
+
+					return evt;
 				});
 
 				// Fire a dojotouchend event on the node where the finger was before it was removed from the screen.
 				// This is different than the native touchend, which fires on the node where the drag started.
 				on(win.doc, "touchend", function(evt){
-					lastTouch = (new Date()).getTime();
+					lastTouch = new Date().getTime();
 					var node = win.doc.elementFromPoint(
 						evt.pageX - (ios4 ? 0 : win.global.pageXOffset), // iOS 4 expects page coords
 						evt.pageY - (ios4 ? 0 : win.global.pageYOffset)
 					) || win.body(); // if out of the screen
 
-					on.emit(node, "dojotouchend", copyEventProps(evt));
+					emit(node, "dojotouchend", copyEventProps(evt));
+					return evt;
 				});
 			});
 		}
 	}
-
-	//device neutral events - touch.press|move|release|cancel/over/out
-	var touch = {
-		press: dualEvent("mousedown", "touchstart", "MSPointerDown"),
-		move: dualEvent("mousemove", "dojotouchmove", "MSPointerMove"),
-		release: dualEvent("mouseup", "dojotouchend", "MSPointerUp"),
-		cancel: dualEvent(mouse.leave, "touchcancel", hasTouch?"MSPointerCancel":null),
-		over: dualEvent("mouseover", "dojotouchover", "MSPointerOver"),
-		out: dualEvent("mouseout", "dojotouchout", "MSPointerOut"),
-		enter: mouse._eventHandler(dualEvent("mouseover","dojotouchover", "MSPointerOver")),
-		leave: mouse._eventHandler(dualEvent("mouseout", "dojotouchout", "MSPointerOut"))
-	};
 
 	/*=====
 	touch = {
@@ -283,7 +271,7 @@ function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
 		// example:
 		//		Have dojo/touch generate clicks without delay, with a move threshold of 50 pixels horizontally and 10 pixels vertically
 		//		|	node.dojoClick = {x:50, y:5};
-		
+
 
 		press: function(node, listener){
 			// summary:
@@ -369,7 +357,15 @@ function(dojo, aspect, dom, domClass, lang, on, has, mouse, domReady, win){
 	};
 	=====*/
 
-	has("extend-dojo") && (dojo.touch = touch);
-
-	return touch;
+	//device neutral events - touch.press|move|release|cancel/over/out
+	return {
+		press:   dualEvent("mousedown", "touchstart", "MSPointerDown"),
+		move:    dualEvent("mousemove", "dojotouchmove", "MSPointerMove"),
+		release: dualEvent("mouseup", "dojotouchend", "MSPointerUp"),
+		cancel:  dualEvent(mouse.leave, "touchcancel", hasTouch ? "MSPointerCancel" : null),
+		over:    dualEvent("mouseover", "dojotouchover", "MSPointerOver"),
+		out:     dualEvent("mouseout", "dojotouchout", "MSPointerOut"),
+		enter:   mouse._eventHandler(dualEvent("mouseover","dojotouchover", "MSPointerOver")),
+		leave:   mouse._eventHandler(dualEvent("mouseout", "dojotouchout", "MSPointerOut"))
+	};
 });
