@@ -1,4 +1,5 @@
 define(["heya-has/sniff", "heya-dom/dom"], function(has, dom){
+	"use strict";
 
 	//TODO: the algorithm below is depricated,
 	// MDN suggests to use event constructors
