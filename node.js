@@ -3,8 +3,9 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 	"use strict";
 
 	has.add("event-orientationchange", has("touch") && !has("android")); // TODO: how do we detect this?
-	has.add("event-stopimmediatepropagation",
-		window.Event && !!window.Event.prototype && !!window.Event.prototype.stopImmediatePropagation);
+	has.add("event-stopimmediatepropagation", function(global){
+		return global.Event && global.Event.prototype && !!global.Event.prototype.stopImmediatePropagation;
+	});
 	has.add("event-focusin", function(global, doc, element){
 		// All browsers except firefox support focusin, but too hard to feature test webkit since element.onfocusin
 		// is undefined.  Just return true for IE and use fallback path for other browsers.
@@ -15,22 +16,43 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 
 	var touchEvents = /^touch/, captures = {focusin: "focus", focusout: "blur"};
 
-	function NodeEvents(source, type){
+	function NodeEvents(source, type, filter){
 		EventSource.call(this);
 		this.source = dom.byId(source);
-		this.type = type;
-		this._remove = this._attach(type);
+		this._removals = [];
+
+		if(this.source && type){
+			var self = this;
+			if(typeof type == "string"){
+				type.replace(/\b\w+\b/g, function(name){
+					self.attach(name);
+					return "";
+				});
+			}else if(type instanceof Array){
+				type.forEach(function(name){
+					self.attach(name);
+				});
+			}
+		}
+
+		if(filter){
+			this.micro.callback = EventSource.makeMultiplexer(this, filter);
+		}
 	}
 	NodeEvents.prototype = Object.create(EventSource.prototype);
 
 	NodeEvents.prototype.destroy =
 	NodeEvents.prototype.remove =
 	NodeEvents.prototype.release = function release(){
-		this._remove();
+		this.remove();
 		EventSource.prototype.release.call(this);
 	};
 
-	NodeEvents.prototype._attach = function(type){
+	NodeEvents.prototype.attach = function(type){
+		if(typeof type == "function"){
+			return type(this);
+		}
+
 		var source = this.source, cb = listener, capture = false;
 		// test to see if it a touch event right now, so we don't have to do it every time it fires
 		if(has("touch")){
@@ -53,15 +75,24 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 		}
 		cb = cb.bind(this);
 		source.addEventListener(type, cb, capture);
-		return function(){
-			source.removeEventListener(adjustedType, cb, capture);
-		};
+		this._removals.push(function(){
+			source.removeEventListener(type, cb, capture);
+		});
+	};
+
+	NodeEvents.prototype.dispatch = function(evt){
+		this.micro.send(new EventSource.Value(evt));
+	};
+
+	NodeEvents.prototype.remove = function(){
+		this._removals.forEach(function(f){ f(); });
+		this._removals = [];
 	};
 
 	// utilities
 
 	function listener(evt){
-		this.micro.send(new EventSource.Value(evt));
+		this.dispatch(evt);
 	}
 
 	var windowOrientation = window.orientation;
@@ -130,7 +161,7 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 			evt = newEvt;
 		}
 
-		this.micro.send(new EventSource.Value(evt));
+		this.dispatch(evt);
 	}
 
 	return NodeEvents;

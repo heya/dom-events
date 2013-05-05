@@ -5,29 +5,52 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 	has.add("jscript", major && (major() + ScriptEngineMinorVersion() / 10));
 
 	has.add("event-orientationchange", has("touch") && !has("android")); // TODO: how do we detect this?
-	has.add("event-stopimmediatepropagation", window.Event && !!window.Event.prototype && !!window.Event.prototype.stopImmediatePropagation);
+	has.add("event-stopimmediatepropagation", function(global){
+		return global.Event && global.Event.prototype && !!global.Event.prototype.stopImmediatePropagation;
+	});
 	has.add("event-focusin", function(global, doc, element){
 		// All browsers except firefox support focusin, but too hard to feature test webkit since element.onfocusin
 		// is undefined.  Just return true for IE and use fallback path for other browsers.
 		return !!element.attachEvent;
 	});
 
-	function NodeEvents(source, type){
+	function NodeEvents(source, type, filter){
 		EventSource.call(this);
 		this.source = dom.byId(source);
-		this.type = type;
-		this._remove = this._attach("on" + type);
+		this._removals = [];
+
+		if(this.source && type){
+			var self = this;
+			if(typeof type == "string"){
+				type.replace(/\b\w+\b/g, function(name){
+					self.attach(name);
+					return "";
+				});
+			}else if(type instanceof Array){
+				type.forEach(function(name){
+					self.attach(name);
+				});
+			}
+		}
+
+		if(filter){
+			this.micro.callback = EventSource.makeMultiplexer(this, filter);
+		}
 	}
 	NodeEvents.prototype = Object.create(EventSource.prototype);
 
 	NodeEvents.prototype.destroy =
 	NodeEvents.prototype.remove =
 	NodeEvents.prototype.release = function release(){
-		this._remove();
+		this.remove();
 		EventSource.prototype.release.call(this);
 	};
 
-	NodeEvents.prototype._attach = function(type){
+	NodeEvents.prototype.attach = function(type){
+		if(typeof type == "function"){
+			return type(this);
+		}
+
 		var source = this.source, capture = false;
 		// touch events are removed because old IE do not support them
 		// IE will leak memory on certain handlers in frames (IE8 and earlier) and in unattached DOM nodes for JScript 5.7 and below.
@@ -48,9 +71,18 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 		}
 		var handle;
 		emitter.listeners.push(handle = (emitter._dojoIEListeners_.push(listener) - 1));
-		return function(){
+		this._removals.push(function(){
 			delete _dojoIEListeners_[handle];
-		};
+		});
+	};
+
+	NodeEvents.prototype.dispatch = function(evt){
+		this.micro.send(new EventSource.Value(evt));
+	};
+
+	NodeEvents.prototype.remove = function(){
+		this._removals.forEach(function(f){ f(); });
+		this._removals = [];
 	};
 
 	// utilities
@@ -116,7 +148,7 @@ define(["heya-has/sniff", "heya-dom/dom", "heya-events/EventSource"],
 				}
 			}
 		}
-		this.micro.send(new EventSource.Value(evt));
+		this.dispatch(evt);
 		// a hack to capture the last event
 		if(evt.modified){
 			// cache the last event and reuse it if we can
