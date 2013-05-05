@@ -1,11 +1,19 @@
-define(["./_base/kernel", "./on", "./has", "./dom", "./_base/window"], function(dojo, on, has, dom, win){
+define(["heya-has/sniff", "heya-dom/dom", "./on"], function(has, dom, on){
+	"use strict";
 
 	// module:
 	//		dojo/mouse
 
-    has.add("dom-quirks", win.doc && win.doc.compatMode == "BackCompat");
-	has.add("events-mouseenter", win.doc && "onmouseenter" in win.doc.createElement("div"));
-	has.add("events-mousewheel", win.doc && 'onmousewheel' in win.doc);
+	has.add("dom-quirks", function(global, doc){
+		return doc && doc.compatMode === "BackCompat";
+	});
+
+	has.add("events-mouseenter", function(global, doc, element){
+		return element && "onmouseenter" in element;
+	});
+	has.add("events-mousewheel", function(global, doc){
+		return doc && "onmousewheel" in doc;
+	});
 
 	var mouseButtons;
 	if((has("dom-quirks") && has("ie")) || !has("dom-addeventlistener")){
@@ -31,7 +39,6 @@ define(["./_base/kernel", "./on", "./has", "./dom", "./_base/window"], function(
 			isRight:  function(e){ return e.button == 2; }
 		};
 	}
-	dojo.mouseButtons = mouseButtons;
 
 /*=====
 	dojo.mouseButtons = {
@@ -78,38 +85,35 @@ define(["./_base/kernel", "./on", "./has", "./dom", "./_base/window"], function(
 	};
 =====*/
 
-	function eventHandler(type, selectHandler){
+	function eventHandler(type){
 		// emulation of mouseenter/leave with mouseover/out using descendant checking
-		var handler = function(node, listener){
-			return on(node, type, function(evt){
-				if(selectHandler){
-					return selectHandler(evt, listener);
-				}
-				if(!dom.isDescendant(evt.relatedTarget, node)){
-					return listener.call(this, evt);
-				}
+		function handler(node){
+			return on(node, type, function(evt, sink){
+				return !dom.isDescendant(evt.relatedTarget, node) ? evt : sink.noValue;
 			});
 		};
 		handler.bubble = function(select){
-			return eventHandler(type, function(evt, listener){
-				// using a selector, use the select function to determine if the mouse moved inside the selector and was previously outside the selector
-				var target = select(evt.target);
-				var relatedTarget = evt.relatedTarget;
-				if(target && (target != (relatedTarget && relatedTarget.nodeType == 1 && select(relatedTarget)))){
-					return listener.call(target, evt);
-				} 
+			return eventHandler(type, function(evt, sink){
+				// using a selector, use the select function to determine
+				// if the mouse moved inside the selector and was previously
+				// outside the selector
+				var target = select(evt.target), relatedTarget = evt.relatedTarget;
+				if(target && (target !== (relatedTarget && relatedTarget.nodeType == 1 && select(relatedTarget)))){
+					return evt;
+				}
+				return sink.noValue;
 			});
 		};
 		return handler;
 	}
 	var wheel;
 	if(has("events-mousewheel")){
-		wheel = 'mousewheel';
+		wheel = "mousewheel";
 	}else{ //firefox
-		wheel = function(node, listener){
-			return on(node, 'DOMMouseScroll', function(evt){
+		wheel = function(node){
+			return on(node, "DOMMouseScroll", function(evt){
 				evt.wheelDelta = -evt.detail;
-				listener.call(this, evt);
+				return evt;
 			});
 		};
 	}
