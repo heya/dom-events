@@ -1,5 +1,5 @@
 define(["domReady", "heya-has/sniff", "heya-dom/dom", "heya-dom/window", "heya-dom/class",
-	"./on", "./emit", "./mouse", ],
+	"./on", "./emit", "./mouse"],
 function(domReady, has, dom, win, cls, on, emit, mouse){
 	"use strict";
 
@@ -88,7 +88,8 @@ function(domReady, has, dom, win, cls, on, emit, mouse){
 							target = dom.byId(target.getAttribute("for")) || target;
 						}
 						setTimeout(function(){
-							emit(target, "click", {
+							emit(target, {
+								type: "click",
 								bubbles : true,
 								cancelable : true,
 								_dojo_click : true
@@ -155,11 +156,13 @@ function(domReady, has, dom, win, cls, on, emit, mouse){
 					// and to ensure this code runs even if the listener on the node does event.stop().
 					var oldNode = hoveredNode;
 					hoveredNode = evt.target;
-					emit(oldNode, "dojotouchout", {
+					emit(oldNode, {
+						type: "dojotouchout",
 						relatedTarget: hoveredNode,
 						bubbles: true
 					});
-					emit(hoveredNode, "dojotouchover", {
+					emit(hoveredNode, {
+						type: "dojotouchover",
 						relatedTarget: oldNode,
 						bubbles: true
 					});
@@ -167,9 +170,10 @@ function(domReady, has, dom, win, cls, on, emit, mouse){
 					doClicks(evt, "touchmove", "touchend"); // init click generation
 				}, true);
 
-				function copyEventProps(evt){
+				function copyEventProps(type, evt){
 					// Make copy of event object and also set bubbles:true.  Used when calling emit().
 					var props = Object.create(evt);
+					props.type = type;
 					props.bubbles = true;
 
 					if(has("ios") >= 6){
@@ -199,13 +203,15 @@ function(domReady, has, dom, win, cls, on, emit, mouse){
 						// Fire synthetic touchover and touchout events on nodes since the browser won't do it natively.
 						if(hoveredNode !== newNode){
 							// touch out on the old node
-							emit(hoveredNode, "dojotouchout", {
+							emit(hoveredNode, {
+								type: "dojotouchout",
 								relatedTarget: newNode,
 								bubbles: true
 							});
 
 							// touchover on the new node
-							emit(newNode, "dojotouchover", {
+							emit(newNode, {
+								type: "dojotouchover",
 								relatedTarget: hoveredNode,
 								bubbles: true
 							});
@@ -216,7 +222,7 @@ function(domReady, has, dom, win, cls, on, emit, mouse){
 						// Unlike a listener on "touchmove", on(node, "dojotouchmove", listener)
 						// fires when the finger drags over the specified node, regardless of
 						// which node the touch started on.
-						emit(newNode, "dojotouchmove", copyEventProps(evt));
+						emit(newNode, copyEventProps("dojotouchmove", evt));
 					}
 
 					return evt;
@@ -231,7 +237,7 @@ function(domReady, has, dom, win, cls, on, emit, mouse){
 						evt.pageY - (ios4 ? 0 : win.global.pageYOffset)
 					) || win.body(); // if out of the screen
 
-					emit(node, "dojotouchend", copyEventProps(evt));
+					emit(node, copyEventProps("dojotouchend", evt));
 					return evt;
 				});
 			});
