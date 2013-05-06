@@ -4,9 +4,9 @@ define(["heya-has/sniff", "heya-dom/dom"], function(has, dom){
 	// but given that it is non-standard, and supported
 	// only by IE < 9, we'll let it slide.
 
-	return function emit(target, type, evt){
+	return function emit(target, evt){
 		var args = slice.call(arguments, 2);
-		var method = "on" + type;
+		var method = "on" + evt.type;
 		if("parentNode" in target){
 			// node (or node-like), create event controller methods
 			var newEvent = args[0] = {};
@@ -16,7 +16,6 @@ define(["heya-has/sniff", "heya-dom/dom"], function(has, dom){
 			newEvent.preventDefault = syntheticPreventDefault;
 			newEvent.stopPropagation = syntheticStopPropagation;
 			newEvent.target = target;
-			newEvent.type = type;
 			evt = newEvent;
 		}
 		do{
