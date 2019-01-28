@@ -1,4 +1,4 @@
-# DOM-events [![Build Status](https://travis-ci.org/heya/dom-events.png?branch=master)](https://travis-ci.org/heya/dom-events)
+# DOM-events [![Build Status](https://travis-ci.org/heya/dom-events.png?branch=master)](https://travis-ci.org/heya/dom-events) [![Greenkeeper badge](https://badges.greenkeeper.io/heya/dom-events.svg)](https://greenkeeper.io/)
 
 DOM-events: event streams for browsers.
 
